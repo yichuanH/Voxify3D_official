@@ -9,16 +9,9 @@ import argparse
 # Scene-level configuration
 # =========================
 scene_configs = {
-    "fallguy" : [[30, "kmeans_rare", 8]],
+    "fallguy" : [[30, "kmeans_rare", 8]], #"kmeans", "maxmin", "mediancut", "sa"
     # "redpanda" : [[50, "kmeans", 6]],
     # "angry" : [[20, "kmeans_rare", 6], [25, "kmeans_rare", 6], [30, "kmeans_rare", 6], [40, "kmeans_rare", 6], [50, "kmeans_rare", 6]],
-    # "bear" :  [[20, "kmeans_rare", 6], [25, "kmeans_rare", 6], [30, "kmeans_rare", 6], [40, "kmeans_rare", 6], [50, "kmeans_rare", 6]],
-    # "benz" :  [[20, "kmeans_rare", 6], [25, "kmeans_rare", 6], [30, "kmeans_rare", 6], [40, "kmeans_rare", 6], [50, "kmeans_rare", 6]],
-    # "blue_horse" :  [[20, "kmeans_rare", 6], [25, "kmeans_rare", 6], [30, "kmeans_rare", 6], [40, "kmeans_rare", 6], [50, "kmeans_rare", 6]],
-    #"corgi" :  [[20, "kmeans_rare", 6], [25, "kmeans_rare", 6], [30, "kmeans_rare", 6], [40, "kmeans_rare", 6], [50, "kmeans_rare", 6]],
-    # "cottage" :  [[20, "kmeans_rare", 6], [25, "kmeans_rare", 6], [30, "kmeans_rare", 6], [40, "kmeans_rare", 6], [50, "kmeans_rare", 6]],
-    # "dog" :  [[20, "kmeans_rare", 6], [25, "kmeans_rare", 6], [30, "kmeans_rare", 6], [40, "kmeans_rare", 6], [50, "kmeans_rare", 6]],
-    # "elephant" :  [[20, "kmeans_rare", 6], [25, "kmeans_rare", 6], [30, "kmeans_rare", 6], [40, "kmeans_rare", 6], [50, "kmeans_rare", 6]],
 }
 
 def main():
@@ -38,13 +31,13 @@ def main():
     data_root = args.data_root
     mode = args.mode
 
-    # 取得原始工作目錄路徑 (absolute path)
+    # Get absolute path of the original working directory
     original_cwd = os.getcwd()
-    
-    # 檢查 DVGO_Gumbel 目錄是否存在
+
+    # Check if the project subfolder exists
     project_subfolder = "Voxify3D"
     if not os.path.exists(project_subfolder):
-        raise SystemExit(f"❌ 錯誤: 找不到專案資料夾 {project_subfolder}！")
+        raise SystemExit(f"Error: project folder not found: {project_subfolder}")
 
     failed_jobs = []
 
@@ -52,25 +45,16 @@ def main():
         if not isinstance(cfg_list, list):
             continue
 
-        # --- 新增步驟：進入子目錄檢查並執行 Blender ---
-        print(f"\n🔍 [Step 1] 檢查 {scene} 的渲染資料...")
-        
-        # 切換到 DVGO_Gumbel
+        # --- Step 1: Check and run Blender rendering if needed ---
+        print(f"\n[Step 1] Checking render data for {scene}...")
+
         os.chdir(project_subfolder)
-        
-        # 檢查 data/{root}/{scene}/ortho 是否存在
-        # 注意：這裡路徑是相對於 DVGO_Gumbel
+
+        # Check if data/{root}/{scene}/ortho exists (path relative to project_subfolder)
         check_path = os.path.join("data", data_root, scene, "ortho")
-        
+
         if not os.path.exists(check_path):
-            print(f"⚠️  找不到 ortho 資料夾，正在執行 Blender 渲染：{scene}...")
-            # 這裡使用系統 Python 3.12 繞過 PEP 668 限制的環境
-            # 加上 --break-system-packages 確保之前的 numpy 安裝能生效
-            # blender_cmd = (
-            #     f"blender -b -P glb2img.py -- "
-            #     f"--input_dir data/{data_root}/{scene} "
-            #     f"--n_views 100 --res 1200"
-            # )
+            print(f"ortho folder not found, running Blender render for: {scene}...")
             blender_exe = "/project2/yichuanh/blender-4.0.2-linux-x64/blender"
 
             glb2img_script = "/project2/yichuanh/Voxify3D/DVGO_Gumbel/glb2img.py"
@@ -79,26 +63,25 @@ def main():
                 f"--input_dir data/{data_root}/{scene} "
                 f"--n_views 100 --res 1200"
             )
-            
+
             try:
                 subprocess.run(blender_cmd, shell=True, check=True)
-                print(f"✅ Blender 渲染完成：{scene}")
+                print(f"Blender render done: {scene}")
             except subprocess.CalledProcessError:
-                print(f"❌ Blender 渲染失敗：{scene}")
-                os.chdir(original_cwd) # 失敗也要記得跳回去
+                print(f"Blender render failed: {scene}")
+                os.chdir(original_cwd)
                 failed_jobs.append((scene, "Blender Error", ""))
                 continue
         else:
-            print(f"✨ {scene} 已有渲染資料，跳過渲染步驟。")
+            print(f"{scene} already has render data, skipping render step.")
 
-        # 跳出 DVGO_Gumbel 回到原始目錄
         os.chdir(original_cwd)
 
-        # --- 原有步驟：執行 execute_gumbel.py ---
+        # --- Step 2: Run execute_gumbel.py ---
         for cfg in cfg_list:
             cell_size, palette, color_num = cfg
 
-            print(f"\n🚀 [Step 2] Starting Task: scene={scene}, mode={mode}")
+            print(f"\n[Step 2] Starting Task: scene={scene}, mode={mode}")
 
             command = (
                 f"python execute_gumbel_color_palette.py "
@@ -110,25 +93,24 @@ def main():
                 f"--palette_mode {palette} "
                 # f"--mode train_ortho"
             )
-            # 如果需要傳遞 mode，取消下面註解
-            # if mode: command += f" --mode {mode}"
+            # Uncomment to pass mode: if mode: command += f" --mode {mode}"
 
             print(f"Running:\n{command}\n")
 
             try:
                 subprocess.run(command, shell=True, text=True, check=True)
             except subprocess.CalledProcessError:
-                print(f"❌ 執行失敗: scene={scene}, cell_size={cell_size}")
+                print(f"Failed: scene={scene}, cell_size={cell_size}")
                 failed_jobs.append((scene, cell_size, palette))
 
-    print("\n✅ 所有任務處理完畢！")
+    print("\nAll tasks completed.")
 
     if failed_jobs:
-        print("\n以下任務執行失敗：")
+        print("\nFailed jobs:")
         for s, c, p in failed_jobs:
             print(f"   Scene: {s}, Info: {c}")
     else:
-        print("\n🎉 全部成功！")
+        print("\nAll succeeded.")
 
 if __name__ == "__main__":
     main()
