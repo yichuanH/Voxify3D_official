@@ -614,7 +614,7 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
     ### 4 color selection methods ###
     if args.palette_mode == "kmeans": 
         color_palette = choose_colors_kmeans(rgb_tr_augmented, color_num)
-    if args.palette_mode == "kmeans_rare": 
+    elif args.palette_mode == "kmeans_rare": 
         color_palette = choose_colors_kmeans_with_rare(rgb_tr_augmented, color_num)
     elif args.palette_mode == "maxmin":
         color_palette = choose_colors_maxmin(rgb_tr_augmented, color_num)
@@ -807,7 +807,7 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
         # progress scaling checkpoint
         cfg_train.pg_scale = []
         
-        if global_step > 4500:
+        if global_step > cfg_train.front_only_start:
             rgb_tr = rgb_tr_ft
             rays_o_tr = rays_o_tr_ft
             rays_d_tr = rays_d_tr_ft
@@ -835,7 +835,7 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
         ### ------- change to computing CLIP loss every 100 epochs
         ### ------- may need to downscale image? (1200x1200 is too large for volume rendering) downsample or use many patches
             H, W = ori_mesh_tr.shape[1:3]
-            patch_size = 80
+            patch_size = cfg_train.patch_size
             patches_per_img = 1
 
             all_target_patches = []
@@ -873,8 +873,6 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
                 imageio.imwrite(img_path, (target_ori_np[i] * 255).astype("uint8"))  # convert to 0-255
                 print(f"Saved {img_path}")
             """
-
-            #breakpoint()
         
 
 
@@ -936,7 +934,7 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
 
             # penalize alpha of transparent pixels that are not fully transparent
             transparent_loss = ((1 - transparent_alpha) ** 2).mean()  # 1 means fully transparent
-            trans_loss_weight = 10.0 #5.0 #1.5
+            trans_loss_weight = cfg_train.transparent_loss_weight #5.0 #1.5
             #1.5  ##1.5   #### 1    ###
 
             # ------------------ Depth Loss ----------------- #
@@ -955,18 +953,18 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
             depth_loss = torch.nn.functional.smooth_l1_loss(render_depth_nor, depth_target_nor)
         
             if(cfg_model.num_voxels <= 110592):  ### >= cell size 25con
-                depth_weight = 10 #20 #5 #5 #1 #1 #0.5 #2 #1
+                depth_weight = cfg_train.depth_weight_big #20 #5 #5 #1 #1 #0.5 #2 #1
             else:
-                depth_weight = 20 #70 #40 #10 #10 #5 #10  ###   
+                depth_weight = cfg_train.depth_weight_small #70 #40 #10 #10 #5 #10  ###   
 
-            if (global_step>4500):
-                depth_weight = 30 ## 80
+            if (global_step>cfg_train.front_only_start):
+                depth_weight = cfg_train.depth_weight_front ## 80
 
             depth_loss *= depth_weight
             transparent_loss = transparent_loss * trans_loss_weight
             
-            mse_loss *= 5
-            loss_ori = mse_loss  +  transparent_loss + depth_loss  ## mse * 3 
+            
+            loss_ori = cfg_train.mse_loss_weight * mse_loss  +  transparent_loss + depth_loss  ## mse * 3 
             
             
    
@@ -1020,16 +1018,16 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
 
             # penalize alpha of transparent pixels that are not fully transparent
             transparent_loss_clip = ((1 - transparent_alpha_clip) ** 2).mean()  # 1 means fully transparent
-            trans_loss_weight = 4.0 #5.0 #1.5
+            trans_loss_weight = cfg_train.trans_loss_clip_weight #5.0 #1.5
             transparent_loss_clip = transparent_loss_clip * trans_loss_weight
             
             #breakpoint()
-            if (global_step<6001):
+            if (global_step<cfg_train.only_trans_start):
                 
                 
                 #clip_loss = loss_ori
                 
-                patch_size = 80
+                patch_size = cfg_train.patch_size
                 num_patches = render_result_clip['rgb_marched'].shape[0] // (patch_size * patch_size)
 
                 render_rgb = render_result_clip['rgb_marched'].reshape(num_patches, patch_size, patch_size, 3)
@@ -1038,9 +1036,9 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
                 clip_loss = clip_loss_fn(render_rgb, target_rgb)
             
                 #loss =   loss_ori + transparent_loss_clip + clip_loss
-                loss =   2 * loss_ori   + 1 *(transparent_loss_clip + clip_loss) # 0.1
+                loss =   cfg_train.loss_ori_weight * loss_ori   +  cfg_train.transparent_loss_clip_weight * transparent_loss_clip + cfg_train.clip_loss_weight * clip_loss 
             else : 
-                loss = 10 * transparent_loss
+                loss = cfg_train.only_trans_loss_weight * transparent_loss
                 clip_loss = torch.tensor(0.0, device="cuda")
                 transparent_loss_clip = torch.tensor(0.0, device="cuda")
             #loss =  2 * loss_ori
@@ -1112,11 +1110,6 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
         print(f'scene_rep_reconstruction ({stage}): saved checkpoints at', last_ckpt_path)
     
     """---- saving density ----"""
-    
-
-
-
-    #density = render_result['raw_density'][near_mask]
     
 
     # plot loss curve
@@ -1356,40 +1349,6 @@ if __name__=='__main__':
         testsavedir = os.path.join(cfg.basedir, cfg.expname, f'render_test_{ckpt_name}')
         os.makedirs(testsavedir, exist_ok=True)
         print('All results are dumped into', testsavedir)
-
-        """
-        # Render the test set
-        rgbs, depths, bgmaps, uncertaintys = render_viewpoints(
-            render_poses=data_dict['poses'][data_dict['i_test']],
-            HW=data_dict['HW'][data_dict['i_test']],
-            Ks=data_dict['Ks'][data_dict['i_test']],
-            gt_imgs=[data_dict['images'][i].cpu().numpy() for i in data_dict['i_test']],
-            savedir=testsavedir, dump_images=args.dump_images,
-            eval_ssim=args.eval_ssim, eval_lpips_alex=args.eval_lpips_alex, eval_lpips_vgg=args.eval_lpips_vgg,
-            **render_viewpoints_kwargs
-        )
-
-        # Save RGB video
-        imageio.mimwrite(os.path.join(testsavedir, 'video.rgb.mp4'), utils.to8b(rgbs), fps=30, quality=8)
-
-        # Save depth video
-        normalized_depths = 1 - depths / np.max(depths)
-        imageio.mimwrite(os.path.join(testsavedir, 'video.depth.mp4'), utils.to8b(normalized_depths), fps=30, quality=8)
-
-        # Save uncertainty video
-        normalized_uncertaintys = 1 - uncertaintys / np.max(uncertaintys)
-        imageio.mimwrite(os.path.join(testsavedir, 'video.uncertainty.mp4'), utils.to8b(normalized_uncertaintys), fps=30, quality=8)
-
-        uncertainty_save_path = os.path.join(testsavedir, 'uncertainty_map.npz')
-        np.savez_compressed(uncertainty_save_path, uncertainty=uncertaintys)
-        print(f"Uncertainty maps saved to {uncertainty_save_path}")
-        """
-        # Save depths as .npz file
-        """
-        depth_save_path = os.path.join(testsavedir, 'test_depths.npz')
-        np.savez_compressed(depth_save_path, depths=depths)
-        print(f"Depth maps saved to {depth_save_path}")
-        """
 
     # render video
     if args.render_video:

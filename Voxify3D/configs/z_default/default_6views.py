@@ -55,6 +55,19 @@ coarse_train = dict(
     weight_nearclip=0,
     weight_distortion=0,
     weight_rgbper=5.0,
+    depth_weight_big=10,
+    depth_weight_small=20,
+    depth_weight_front=30,
+    front_only_start=4500,
+    mse_loss_weight=5,
+    patch_size=80,
+    transparent_loss_weight=10.0,
+    trans_loss_clip_weight=4.0,
+    only_trans_start=6001,
+    loss_ori_weight=2,
+    transparent_loss_clip_weight=1,
+    clip_loss_weight=1,
+    only_trans_loss_weight=10,
     tv_every=1,
     tv_after=0,
     tv_before=0,
@@ -66,6 +79,7 @@ coarse_train = dict(
     decay_after_scale=1.0,
     skip_zero_grad_fields=[],
     maskout_lt_nviews=0,
+    
     )
 
 fine_train = deepcopy(coarse_train)

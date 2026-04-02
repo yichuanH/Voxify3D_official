@@ -1,6 +1,8 @@
 # Voxify3D: Pixel Art Meets Volumetric Rendering
 
-[**Project Page**](https://yichuanh.github.io/Voxify-3D/) ｜ [**ArXiv**](https://arxiv.org/abs/2512.07834)
+**CVPR 2026**
+
+[**Project Page**](https://yichuanh.github.io/Voxify-3D/) | [**ArXiv**](https://arxiv.org/abs/2512.07834)
 
 <p align="center">
   <img src="teaser.png" width="100%" />
@@ -12,6 +14,7 @@
 Official implementation of Voxify3D.
 
 This repository provides the complete pipeline for generating stylized voxel art by combining pixel art guidance with volumetric rendering.
+
 ---
 
 ## Two Pipelines
@@ -25,38 +28,60 @@ This repository contains two entry points depending on your starting material:
 
 ---
 
+<!-- ## Tested Environment
+
+This project has been tested with the following setup:
+
+| Component | Version |
+|---|---|
+| OS | Ubuntu 20.04 / 22.04 |
+| Python | 3.10 |
+| CUDA | 11.8 |
+| PyTorch | 2.5.0 |
+| torchvision | 0.20.0 |
+| torchaudio | 2.5.0 |
+| mmcv | 2.2.0 |
+| Blender | 3.x / 4.x |
+
+> Using other Python / CUDA / PyTorch versions may require additional adjustments, especially for `torch_scatter` and `mmcv` which are tightly coupled to specific CUDA and PyTorch versions.
+
+--- -->
+
 ## Environment Setup
 
-We recommend creating a dedicated conda environment named `voxify3d`.
-
-Create and activate the environment:
+We recommend creating a dedicated conda environment named `voxify3d`:
 
 ```bash
-conda create -n voxify3d python=3.9 -y
+conda create -n voxify3d python=3.10 -y
 conda activate voxify3d
 ```
 
-Install dependencies:
+> **Before running `pip install -r requirements.txt`**, you must first manually install the following packages that are tightly coupled to your CUDA and PyTorch versions:
+> - `torch` / `torchvision` / `torchaudio`
+> - `torch_scatter`
+> - `mmcv`
+> - `torch-efficient-distloss`
+>
+> These cannot be installed generically — please refer to each project's official installation instructions and match the versions to your environment. Using mismatched versions is the most common cause of setup failures.
+
+Once the above are installed, install the remaining dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Install PyTorch manually according to your CUDA version. Please refer to the official PyTorch installation guide:  
-https://pytorch.org/get-started/locally/
-
-Example for CUDA 11.8:
-
-```bash
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-```
+---
 
 ### Additional requirement for `Run_Voxify3D_glb.py` (GLB pipeline)
 
 `Run_Voxify3D_glb.py` uses **Blender** to automatically render orthographic images from a GLB file. Blender cannot be installed via pip and must be set up separately:
 
 1. Download Blender from https://www.blender.org/download/ (tested with Blender 3.x / 4.x)
-2. Make sure the `blender` executable is accessible from your terminal (add it to `PATH`), or set the path directly in the script.
+2. In `Run_Voxify3D_glb.py`, update `blender_exe` to the absolute path of your Blender executable:
+
+```python
+blender_exe = "/path/to/your/blender"
+```
 
 ---
 
@@ -88,16 +113,7 @@ Please download the following pretrained models and place them in the specified 
 
 This pipeline takes a `.glb` file as input and handles orthographic rendering automatically using Blender.
 
-Edit the scene configuration at the top of `Run_Voxify3D_glb.py`:
-
-```python
-scene_configs = {
-    "fallguy": [[30, "kmeans_rare", 8]],
-    # "redpanda": [[50, "kmeans", 6]],
-}
-```
-
-Each entry maps a scene name to a list of `[cell_size, palette_mode, color_num]` configs.
+Before running, edit `scene_configs` at the top of `Run_Voxify3D_glb.py` to specify which scenes to process and their parameters (`cell_size`, `palette_mode`, `color_num`).
 
 Place your `.glb` file under `Voxify3D/data/{data_root}/{scene}/` and name it `{scene}.glb`. For example:
 
@@ -113,6 +129,20 @@ python Run_Voxify3D_glb.py --device 0 --data_root GLB
 
 - `--device`: GPU id(s), e.g. `0` or `0,1`
 - `--data_root`: root directory for the data (default: `GLB`)
+
+#### Checking render quality
+
+After the first run, check whether the object appears too large or too small in the rendered images. If it does, adjust `WORLD_SIZE` in `Voxify3D/glb2img.py`:
+
+```python
+WORLD_SIZE = 2.0  # Increase to zoom out, decrease to zoom in
+```
+
+Then delete the incorrect render folders (e.g. `ortho/`, `6views/`) — keep only the `.glb` file in the scene directory — and re-run the pipeline.
+
+#### Output
+
+Results are saved under `Voxify3D/voxel_result/`.
 
 ---
 
@@ -148,7 +178,7 @@ The `--gpu` argument specifies the GPU id via `CUDA_VISIBLE_DEVICES`.
 
 ## Notes
 
-This codebase has been tested on Linux systems with NVIDIA GPUs. Different CUDA or PyTorch versions may require minor adjustments. Please ensure that all pretrained models and dataset files are placed in the correct directories before running the pipeline.
+This codebase has been tested on Linux systems with NVIDIA GPUs. Please ensure that all pretrained models and dataset files are placed in the correct directories before running the pipeline.
 
 ---
 

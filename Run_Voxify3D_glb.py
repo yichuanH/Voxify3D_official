@@ -9,7 +9,7 @@ import argparse
 # Scene-level configuration
 # =========================
 scene_configs = {
-    "fallguy" : [[30, "kmeans_rare", 8]], #"kmeans", "maxmin", "mediancut", "sa"
+    "Chiikawa" : [[30, "kmeans_rare", 4], [30, "kmeans_rare", 3], [40, "kmeans_rare", 4] ] #"kmeans", "maxmin", "mediancut", "sa"
     # "redpanda" : [[50, "kmeans", 6]],
     # "angry" : [[20, "kmeans_rare", 6], [25, "kmeans_rare", 6], [30, "kmeans_rare", 6], [40, "kmeans_rare", 6], [50, "kmeans_rare", 6]],
 }
@@ -55,9 +55,9 @@ def main():
 
         if not os.path.exists(check_path):
             print(f"ortho folder not found, running Blender render for: {scene}...")
-            blender_exe = "/project2/yichuanh/blender-4.0.2-linux-x64/blender"
+            blender_exe = "/project2/yichuanh/blender-4.0.2-linux-x64/blender" # Revise here!
 
-            glb2img_script = "/project2/yichuanh/Voxify3D/DVGO_Gumbel/glb2img.py"
+            glb2img_script = "glb2img.py"
             blender_cmd = (
                 f"{blender_exe} -b -P {glb2img_script} -- "
                 f"--input_dir data/{data_root}/{scene} "
