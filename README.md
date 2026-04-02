@@ -12,16 +12,6 @@
 Official implementation of Voxify3D.
 
 This repository provides the complete pipeline for generating stylized voxel art by combining pixel art guidance with volumetric rendering.
-
----
-
-## 🛠️ TODO
-- ✅ Release a version that requires users to prepare the dataset format themselves (orthographic, 6 views)
-- ✅ Provide an example dataset: `Rodin/Dragon`
-- ✅ Provide a simplified GLB-to-voxel-art pipeline (`Run_Voxify3D_glb.py`)
-- ⬜ Provide more example datasets
-> 🔔 **Note:** A fully integrated version with a one-click end-to-end pipeline is planned to be released in **2026 February**.
-
 ---
 
 ## Two Pipelines
@@ -156,71 +146,6 @@ The `--gpu` argument specifies the GPU id via `CUDA_VISIBLE_DEVICES`.
 
 ---
 
-## Preparing Your Own Dataset (for `Run_Voxify3d.py`)
-
-### Orthographic multi-view images
-
-Prepare **50–100 orthographic-rendered images** of the mesh with known camera parameters and place them under:
-
-```text
-Voxify3D/data/{ROOT}/{scene}/ortho/
-```
-
-The directory must contain:
-
-```text
-ortho/
-├── train/
-├── test/
-├── val/
-├── transforms_train.json
-├── transforms_test.json
-└── transforms_val.json
-```
-
-- Images should be rendered using **orthographic projection**
-- `train`, `test`, and `val` contain RGB images
-- Each `transforms_*.json` stores the corresponding camera parameters
-
----
-
-### Canonical 6-view orthographic projections
-
-Additionally, prepare **six canonical orthographic views** (front, back, left, right, top, bottom) and place them under:
-
-```text
-Voxify3D/data/{ROOT}/{scene}/6views/
-```
-
-The directory must contain:
-
-```text
-6views/
-├── train/
-├── test/
-├── val/
-├── transforms_train.json
-├── transforms_test.json
-└── transforms_val.json
-```
-
-- The `train`, `test`, and `val` folders may contain identical images
-- The transforms files should include camera parameters for the six canonical views
-
----
-
-### Reference example
-
-A complete data format example is provided at:
-
-```text
-Voxify3D/data/Rodin/Dragon
-```
-
-We strongly recommend following this example when preparing custom datasets.
-
----
-
 ## Notes
 
 This codebase has been tested on Linux systems with NVIDIA GPUs. Different CUDA or PyTorch versions may require minor adjustments. Please ensure that all pretrained models and dataset files are placed in the correct directories before running the pipeline.
@@ -247,10 +172,10 @@ We thank the authors for making their work publicly available.
 If you find our work useful, please cite this paper and give us a ⭐️.
 
 ```BibTex
-@article{voxify3d,
-    author    = {Huang, Yi-Chuan and Chan, Jiewen and Chien, Hao-Jen and Liu, Yu-Lun},
-    title     = {Voxify3D: Pixel Art Meets Volumetric Rendering},
-    journal   = {arXiv preprint arXiv:2512.07834},
-    year      = {2025}
+@inproceedings{huang2026voxify3d,
+  author    = {Huang, Yi-Chuan and Chan, Jiewen and Chien, Hao-Jen and Liu, Yu-Lun},
+  title     = {Voxify3D: Pixel Art Meets Volumetric Rendering},
+  booktitle = {CVPR},
+  year      = {2026}
 }
 ```
