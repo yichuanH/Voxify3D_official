@@ -1,0 +1,8 @@
+Voxify3D/logs/
+logs/
+*.tar
+*.pth
+*.ckpt
+__pycache__/
+*.pyc
+.DS_Store
