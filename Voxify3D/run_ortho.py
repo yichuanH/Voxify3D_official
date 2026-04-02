@@ -91,8 +91,7 @@ def render_viewpoints(model, render_poses, HW, Ks, ndc, render_kwargs,
     lpips_alex = []
     lpips_vgg = []
 
-    ###  -- test 跑六次 -- #
-    for i, c2w in enumerate(tqdm(render_poses)):   
+    for i, c2w in enumerate(tqdm(render_poses)):
 
         H, W = HW[i]
         K = Ks[i]
@@ -300,7 +299,7 @@ def compute_bbox_by_coarse_geo(model_class, model_path, thres):
     eps_time = time.time() - eps_time
     print('compute_bbox_by_coarse_geo: finish (eps time:', eps_time, 'secs)')
 
-    #import ipdb; ipdb.set_trace()  ## break point #根本沒進來
+    #import ipdb; ipdb.set_trace()
     return xyz_min, xyz_max
 
 # --------------- return xyz_min, xyz_max
@@ -375,17 +374,16 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
 
     # breakpoint()   
 
-    # 手動放大場景範圍
-    scale_factor = 0.036 #!   #scene_scale #越小越精細 
+    # Scale the scene bounding box
+    scale_factor = 0.036 #! scene_scale: smaller = finer
 
-    # 將 xyz_min 和 xyz_max 轉換為 Tensor
     xyz_min = torch.tensor(xyz_min, dtype=torch.float32, device=device)
     xyz_max = torch.tensor(xyz_max, dtype=torch.float32, device=device)
 
     xyz_min = xyz_min.to(dtype=torch.float32)
     xyz_max = xyz_max.to(dtype=torch.float32)
 
-    # 計算中心點和擴展範圍
+    # Compute center and expand range
     center = (xyz_min + xyz_max) / 2
     extent = (xyz_max - xyz_min) * scale_factor / 2
     xyz_min = center - extent
@@ -542,7 +540,7 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
         uncertainty_loss = 0.5 * (torch.exp(-uncertainty))* F.mse_loss(render_result['rgb_marched'], target, reduction='none') \
         + 0.1 * (uncertainty)
 
-        # 平均 loss
+        # Average loss
         uncertainty_loss = uncertainty_loss.mean()
         # breakpoint()
         #loss = uncertainty.mean() + F.mse_loss(render_result['rgb_marched'], target)
@@ -556,13 +554,13 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
         #loss = cfg_train.weight_main * F.mse_loss(render_result['rgb_marched'], target)
         ####    add here
         mse_loss = F.mse_loss(render_result['rgb_marched'], target)
-        psnr = utils.mse2psnr(mse_loss.detach())  # 用純 MSE loss 計算 PSNR
+        psnr = utils.mse2psnr(mse_loss.detach())  # compute PSNR from pure MSE loss
 
         loss = mse_loss
         
         #breakpoint()
         #psnr = utils.mse2psnr(loss.detach())
-        loss_lst.append(loss.item())  # 在每次 iteration 記錄 loss
+        loss_lst.append(loss.item())  # record loss at each iteration
 
         if cfg_train.weight_entropy_last > 0:
             pout = render_result['alphainv_last'].clamp(1e-6, 1-1e-6)
@@ -637,11 +635,11 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
             }, path)
             print(f'scene_rep_reconstruction ({stage}): saved checkpoints at', path)
         
-        #render_depths.append( render_result['depth']  )#### 1200 個views 裡面隨機選， 8192 條裡面最大是 53  ###最後一張
-    
-    # -------- 8000 iters end
-    
-    # 繪製 Loss 變化圖
+        #render_depths.append( render_result['depth'] )
+
+    # -------- end of training iterations
+
+    # Plot loss curve
     plt.figure(figsize=(8, 5))
     plt.plot(loss_lst, label='Loss', color='blue', alpha=0.7)
     plt.xlabel('Iteration')
@@ -650,10 +648,10 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
     plt.legend()
     plt.grid(True)
 
-    # 存成圖片
+    # Save loss plot
     loss_plot_path = os.path.join(cfg.basedir, cfg.expname, f'{stage}_loss_curve.png')
     plt.savefig(loss_plot_path)
-    plt.show()  # 可以選擇顯示或關閉
+    plt.show()
 
     print(f"Loss curve saved at {loss_plot_path}")
 
@@ -666,9 +664,7 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
     ###  end iteration ----
         
     ### ------------------------ save tar  ckpt ---------------------- #
-    if global_step != -1 :
-                # 儲存時排除 uncertainty_grid
-       
+    if global_step != -1:
         model_state = model.state_dict()
 
         torch.save({
@@ -680,7 +676,7 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
 
         print(f'scene_rep_reconstruction ({stage}): saved checkpoints at', last_ckpt_path)
 
-    # construct an uncertain voxel grid with initialized high uncertainty  ##### coarse 結束的時候有用到
+    # construct an uncertain voxel grid with initialized high uncertainty
     
 
 def train(args, cfg, data_dict):
@@ -871,7 +867,7 @@ if __name__=='__main__':
     # render testset and eval
     if args.render_test:
 
-        ckpt_path = os.path.join(cfg.basedir, cfg.expname, 'fine_last.tar')   #### 要視覺化哪個階段的train, 這裡要改
+        ckpt_path = os.path.join(cfg.basedir, cfg.expname, 'fine_last.tar')
         #ckpt_path = os.path.join(cfg.basedir, cfg.expname, 'coarse_last.tar') 
         ckpt_name = ckpt_path.split('/')[-1][:-4]
 
@@ -939,24 +935,24 @@ if __name__=='__main__':
             **render_viewpoints_kwargs
         )
 
-        # ✅ 存 RGB 影片
+        # Save RGB video
         imageio.mimwrite(os.path.join(testsavedir, 'video.rgb.mp4'), utils.to8b(rgbs), fps=30, quality=8)
 
-        # ✅ 存 Depth 影片
+        # Save Depth video
         depths_vis = depths * (1 - bgmaps) + bgmaps
         dmin, dmax = np.percentile(depths_vis[bgmaps < 0.1], q=[5, 95])
         depth_vis = plt.get_cmap('rainbow')(1 - np.clip((depths_vis - dmin) / (dmax - dmin), 0, 1)).squeeze()[..., :3]
         imageio.mimwrite(os.path.join(testsavedir, 'video.depth.mp4'), utils.to8b(depth_vis), fps=30, quality=8)
 
-        # ✅ 存 Uncertainty 影片
+        # Save Uncertainty video
         uncertaintys_vis = uncertaintys * (1 - bgmaps) + bgmaps
         dmin, dmax = np.percentile(uncertaintys_vis[bgmaps < 0.1], q=[5, 95])
         uncertainty_vis = plt.get_cmap('rainbow')(1 - np.clip((uncertaintys_vis - dmin) / (dmax - dmin), 0, 1)).squeeze()[..., :3]
         imageio.mimwrite(os.path.join(testsavedir, 'video.uncertainty.mp4'), utils.to8b(uncertainty_vis), fps=30, quality=8)
 
         """
-        # ✅ 存 Weights 影片（讓所有 weight 都變成 1）
-        weights_fixed = np.ones_like(weights)  # ✅ 固定所有 weights 為 1
+        # Save Weights video (set all weights to 1)
+        weights_fixed = np.ones_like(weights)  # fix all weights to 1
         weights_vis = weights_fixed * (1 - bgmaps) + bgmaps
         dmin, dmax = np.percentile(weights_vis[bgmaps < 0.1], q=[5, 95])
         weights_vis = plt.get_cmap('rainbow')(1 - np.clip((weights_vis - dmin) / (dmax - dmin), 0, 1)).squeeze()[..., :3]
