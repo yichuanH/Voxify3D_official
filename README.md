@@ -95,6 +95,8 @@ Download the following pretrained models and place them in the specified directo
 
 ### PixelArt models
 
+These models are from **"Make Your Own Sprites: Aliasing-Aware and Cell-Controllable Pixelization"** (SIGGRAPH Asia 2022) and are subject to their own **non-commercial license**. Please read and comply with the [original license](https://github.com/WuZongWei6/Pixelization) before use. **Unauthorized commercial use is prohibited.**
+
 | Model | Destination | Download |
 |---|---|---|
 | Pixel Art checkpoint | `PixelArt/` | [Download](https://drive.google.com/file/d/1VRYKQOsNlE1w1LXje3yTRU5THN2MGdMM/view?usp=sharing) |
@@ -202,4 +204,6 @@ If you find our work useful, please cite:
 
 ## License
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+This project is licensed for **non-commercial scientific research purposes only**. See [LICENSE](LICENSE) for full terms.
+
+Note: The PixelArt pretrained models used in this pipeline are from a third-party work and carry their own non-commercial restriction. Commercial use of any part of this pipeline is prohibited.
