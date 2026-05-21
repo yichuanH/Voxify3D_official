@@ -123,14 +123,10 @@ def render_viewpoints(model, render_poses, HW, Ks, ndc, render_kwargs,
             k: torch.cat([ret[k] for ret in render_result_chunks]).reshape(H,W,-1)
             for k in render_result_chunks[0].keys()
         }
-        rgb = render_result['rgb_marched'].cpu().numpy() # [1200,1200,1]
-        depth = render_result['depth'].cpu().numpy() ## [1200,1200,1]
-        bgmap = render_result['alphainv_last'].cpu().numpy() ## [1200,1200,1]
-        #breakpoint()
-        uncertainty = (F.elu(render_result['uncertainty_near'])+1).cpu().numpy()  ## [1200,1200,1]
-
-        #uncertainty = F.elu(render_result['uncertainty'])+1 
-        #breakpoint() # check the range of uncertainty  (after elu, normally 1e-6~~~1)
+        rgb = render_result['rgb_marched'].cpu().numpy()
+        depth = render_result['depth'].cpu().numpy()
+        bgmap = render_result['alphainv_last'].cpu().numpy()
+        uncertainty = (F.elu(render_result['uncertainty_near'])+1).cpu().numpy()
 
 
         rgbs.append(rgb)
@@ -240,8 +236,6 @@ def load_everything(args, cfg, scale_factor=1.0):
 
 
 # ------------- Compute BBox ---------------- #
-# ------------- Compute BBox ---------------- #
-# ------------- Compute BBox ---------------- #
 
 def _compute_bbox_by_cam_frustrm_bounded(cfg, HW, Ks, poses, i_train, near, far):
     xyz_min = torch.Tensor([np.inf, np.inf, np.inf])
@@ -314,10 +308,7 @@ def compute_bbox_by_coarse_geo(model_class, model_path, thres):
     print('compute_bbox_by_coarse_geo: xyz_max', xyz_max)
     eps_time = time.time() - eps_time
     print('compute_bbox_by_coarse_geo: finish (eps time:', eps_time, 'secs)')
-   
     return xyz_min, xyz_max
-
-# --------------- return xyz_min, xyz_max
 
 
 # Create a DVGO model 
@@ -335,7 +326,7 @@ def create_new_model(cfg, cfg_model, cfg_train, xyz_min, xyz_max, stage, coarse_
             xyz_min=xyz_min, xyz_max=xyz_max,
             num_voxels=num_voxels,
             **model_kwargs)
-    else:  #### 00000  Normal
+    else:
         print(f'scene_rep_reconstruction ({stage}): \033[96muse dense voxel grid\033[0m')
         model_class = dvgo_ortho.DirectVoxGO
         model = model_class(
@@ -344,7 +335,6 @@ def create_new_model(cfg, cfg_model, cfg_train, xyz_min, xyz_max, stage, coarse_
             mask_cache_path=coarse_ckpt_path,
             **model_kwargs)
     model = model.to(device)
-    # model = nn.DataParallel(model).to(device)
     optimizer = utils.create_optimizer_or_freeze_model(model, cfg_train, global_step=0)
     return model, optimizer
 
@@ -355,15 +345,12 @@ def load_existed_model(args, cfg, cfg_train, reload_ckpt_path, color_palette):
     elif cfg.data.unbounded_inward:
         model_class = dcvgo.DirectContractedVoxGO
     else:
-        #breakpoint()
         model_class = dvgo_ortho.DirectVoxGO
     color_num = color_palette.shape[0]
     model = utils.load_model(model_class, reload_ckpt_path,  extra_kwargs={"color_palette": color_palette,"color_num": color_num,}).to(device)
     optimizer = utils.create_optimizer_or_freeze_model(model, cfg_train, global_step=0)
     model, optimizer, start = utils.load_checkpoint(
             model, optimizer, reload_ckpt_path, args.no_reload_optimizer)
-
-    #breakpoint()
     return model, optimizer, start
 
 
@@ -372,7 +359,6 @@ def load_existed_model(args, cfg, cfg_train, reload_ckpt_path, color_palette):
 
 def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, data_dict, stage, coarse_ckpt_path=None):
 
-    #### ---------------------- train -------------   ###
     print(" ------------------- Start Scene Reconstruction -------------- ")
 
     # initialize loss history
@@ -392,20 +378,13 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
         xyz_min -= xyz_shift
         xyz_max += xyz_shift
 
-    depth_gt, HW, Ks, near, far, i_train, i_val, i_test, poses, render_poses, images  , images_gt= [
+    depth_gt, HW, Ks, near, far, i_train, i_val, i_test, poses, render_poses, images, images_gt = [
         data_dict[k] for k in [
             'depth_gt', 'HW', 'Ks', 'near', 'far', 'i_train', 'i_val', 'i_test', 'poses', 'render_poses', 'images', 'images_gt'
         ]
     ]
 
-
-
-    #breakpoint()
-    # depth_gt  (6, 1200, 1200, 1)
-    # image ([18, 1200, 1200, 3])   
-    # breakpoint()
-    # manually expand scene range
-    scale_factor = 0.036 #!   #scene_scale #smaller = finer
+    scale_factor = 0.036  # scene scale: smaller = finer
 
     # convert xyz_min and xyz_max to Tensor
     xyz_min = torch.tensor(xyz_min, dtype=torch.float32, device=device)
@@ -427,7 +406,6 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
     elif args.ft_path:    ###### ft_path =  reload ckpt
         reload_ckpt_path = args.ft_path
         print("reload_ckpt_path from : ", args.ft_path)
-        #breakpoint()
     elif os.path.isfile(last_ckpt_path):
         reload_ckpt_path = last_ckpt_path
     else:
@@ -470,16 +448,7 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
                 flip_x=cfg.data.flip_x, flip_y=cfg.data.flip_y)
         index_generator = dvgo_ortho.batch_indices_generator(len(rgb_tr), cfg_train.N_rand)
         batch_index_sampler = lambda: next(index_generator)
-        is_transparent = (rgb_tr == 1).all(dim=-1)  # Shape: [N, H, W], determine whether each pixel is transparent    #[6, 1200, 1200]
-        #is_transparent_gt = (rgb_tr_gt_ori == 1).all(dim=-1)
-        #breakpoint()
-
-        # rgb_tr [6, 1200, 1200, 3]
-        # rays_o_tr [6, 1200, 1200, 3]
-        # rays_d_tr [6, 1200, 1200, 3]
-        # viewdirs_tr [6, 1200, 1200, 3]
-        # imsz  [1, 1, 1, 1, 1, 1]
-        #breakpoint()
+        is_transparent = (rgb_tr == 1).all(dim=-1)  # [N, H, W]
         return is_transparent, rgb_tr, rays_o_tr, rays_d_tr, viewdirs_tr, imsz, batch_index_sampler, ori_mesh_img
     
     def gather_training_rays_one(index):
@@ -506,17 +475,9 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
 
         index_generator = dvgo_ortho.batch_indices_generator(len(rgb_tr), cfg_train.N_rand)
         batch_index_sampler = lambda: next(index_generator)
-        is_transparent = (rgb_tr == 1).all(dim=-1)  # Shape: [1, H, W]
+        is_transparent = (rgb_tr == 1).all(dim=-1)  # [1, H, W]
 
-        #breakpoint()
-        # rgb_tr   [1, 1200, 1200, 3]
-        # rays_o_tr [1, 1200, 1200, 3]
-        # rays_d_tr [1, 1200, 1200, 3]
-        # viewdirs_tr [1, 1200, 1200, 3]
-        # ori_mesh_img [1, 1200, 1200, 3]
-        
-        
-        # repeat the original output tensor 6 times to get [6, 1200, 1200, 3]
+        # repeat to match 6-view shape [6, 1200, 1200, 3]
         rgb_tr = rgb_tr.repeat(6, 1, 1, 1)
         rays_o_tr = rays_o_tr.repeat(6, 1, 1, 1)
         rays_d_tr = rays_d_tr.repeat(6, 1, 1, 1)
@@ -592,9 +553,7 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
         probs = torch.softmax(logits, dim=1)
         return -torch.mean(torch.sum(probs * torch.log(probs + 1e-10), dim=1))
 
-    ### -------- gather ray information  ---------- #
-
-    color_num = args.color_num  ### number of palette colors
+    color_num = args.color_num
 
     is_transparent, rgb_tr, rays_o_tr, rays_d_tr, viewdirs_tr, imsz, batch_index_sampler, ori_mesh_tr = gather_training_rays()
     is_transparent_ft, rgb_tr_ft, rays_o_tr_ft, rays_d_tr_ft, viewdirs_tr_ft, _, batch_index_sampler, ori_mesh_tr_ft = gather_training_rays_one(index = 3)
@@ -608,11 +567,7 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
     # concatenate original rgb_tr with repeated_front
     rgb_tr_augmented = torch.cat([rgb_tr, repeated_front], dim=0)  # shape: (9, 1200, 1200, 3)
 
-    # use augmented tensor for color selection
-    #color_palette = choose_colors_kmeans(rgb_tr_augmented, color_num)
-
-    ### 4 color selection methods ###
-    if args.palette_mode == "kmeans": 
+    if args.palette_mode == "kmeans":
         color_palette = choose_colors_kmeans(rgb_tr_augmented, color_num)
     elif args.palette_mode == "kmeans_rare": 
         color_palette = choose_colors_kmeans_with_rare(rgb_tr_augmented, color_num)
@@ -623,24 +578,14 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
     elif args.palette_mode == "sa":
         color_palette = choose_colors_sa(rgb_tr_augmented, color_num)
     else:
-        raise ValueError(f"❌ Unknown palette_mode: {args.palette_mode}")
+        raise ValueError(f"Unknown palette_mode: {args.palette_mode}")
 
-        
-    #color_palette = choose_colors_median_cut(rgb_tr, color_num)
-    #color_palette = choose_colors_maxmin(rgb_tr, color_num)
-    
-    #breakpoint()
-    #color_palette = read_hex ("ColorPalette/palettes/other/aqua_verde.hex") ### specify colors
-    #breakpoint()
-    #coarse_output_path = args.export_coarse_only
     a = cfg.basedir ##  './logs/edify/cowboy_wolf'
     b = cfg.expname ##   'dvgo_cowboy_wolf6_views'
     save_dir = os.path.join(a, b)
     os.makedirs(save_dir, exist_ok=True)  # ensure directory exists
     np.savez(os.path.join(save_dir, "color_palette.npz"), color_palette=color_palette)
-    #breakpoint()
-    
-    
+
     # init model and optimizer
     if reload_ckpt_path is None:
         print(f'scene_rep_reconstruction ({stage}): train from scratch')
@@ -652,52 +597,18 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
     else:
         print("----------------- reload exist model -------------------")
         print(f'scene_rep_reconstruction ({stage}): reload from {reload_ckpt_path}')
-        ### model.k0.grid.shape ###
-        ### [1, 3, 40, 40, 40] ###
-        
-        ### p model.k0 ###
-        ### DenseGrid(channels=3, world_size=[40, 40, 40]) ###
-        
-        # p model.density.grid.shape
-        # torch.Size([1, 1, 40, 40, 40])
-        
-        #convert_densegrid_to_logitgrid
-        
-        # if k0 is DenseGrid, perform conversion
-        # initialize logit_grid with color_palette
-
-            # create a new LogitGrid and replace
-        ### logit_grid.shape : [1, 8, 40, 40, 40]
-        model, optimizer, start = load_existed_model(args, cfg, cfg_train, reload_ckpt_path, color_palette)  ## model   ### this time model.palette is None
+        model, optimizer, start = load_existed_model(args, cfg, cfg_train, reload_ckpt_path, color_palette)
         for i, group in enumerate(optimizer.param_groups):
             print(f"\n[Parameter Group {i}] lr={group['lr']}")
             for p in group['params']:
                 print("  param id:", id(p), "| shape:", p.shape, "| requires_grad:", p.requires_grad)
 
-        
-        
-        # breakpoint()
-         
         logit_grid = convert_densegrid_to_logitgrid(
                 densegrid=model.k0.grid,           # [1, 3, D, H, W]
                 palette=color_palette.tolist(),    # [[r,g,b], ...]
                 temperature=0.1                    # adjustable temperature parameter
         )
 
-
-        """
-
-        ### random initialize
-        logit_grid = random_densegrid_to_logitgrid(
-                densegrid=model.k0.grid,           # [1, 3, D, H, W]
-                palette=color_palette.tolist(),    # [[r,g,b], ...]
-                temperature=0.1                    # adjustable temperature parameter
-        )
-        """
-        
-        
-        #breakpoint()
-        
         model.color_palette = torch.tensor(color_palette, dtype=torch.float32, device=device)
 
         logit_grid_tensor = torch.tensor(logit_grid, dtype=torch.float32, device=model.logit.grid.device)
@@ -708,38 +619,14 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
             {'params': model.density.parameters()},
             {'params': model.logit.parameters(), 'lr': 1e-2},
         ], lr=1e-3)
-        
-        """
-        for i, group in enumerate(optimizer.param_groups):
-            print(f"\n[Param Group {i}] lr={group['lr']}, num_params={len(group['params'])}")
-            for p in group['params']:
-                print("  param id:", id(p), "| shape:", p.shape)
 
-        breakpoint()
-        # [1, 3, 60, 60, 60] #[1, 1, 60, 60, 60] #[1, 8, 60, 60, 60]
-        
-        
-        """
-        
-        
-        #D, H, W = model.k0.grid.shape[2:]
- 
-        
-        
-        
+
     if cfg_model.maskout_near_cam_vox:
         model.maskout_near_cam_vox(poses[i_train,:3,3], near)
 
     # reset optimizer for retraining
     optimizer = utils.create_optimizer_or_freeze_model(model, cfg_train, global_step=start)
     start = 0  # training starts from scratch
-    
-    for i, group in enumerate(optimizer.param_groups):
-            print(f"\n[Param Group {i}] lr={group['lr']}, num_params={len(group['params'])}")
-            for p in group['params']:
-                print("  param id:", id(p), "| shape:", p.shape)
-    #breakpoint()
-    # init rendering setup
     
     render_kwargs = {
         'near': data_dict['near'],
@@ -752,21 +639,6 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
         'flip_y': cfg.data.flip_y,
     }
 
-    # init batch rays sampler   #### create another gather_training_rays for images_gt slicing?
-    ### ------- find color palette ---- ###
-    
-    
-    
-    #breakpoint()
-    
-    
-    ### compute a full-image version here
-    # is_transparent, rgb_tr, rays_o_tr, rays_d_tr, viewdirs_tr, imsz, batch_index_sampler = gather_training_rays()
-
-    
-    #breakpoint()
-    ### breakpoint   ####check rgb_tr ##add rgb_tr_gt
-
     # view-count-based learning rate
     if cfg_train.pervoxel_lr:
         def per_voxel_init():
@@ -776,29 +648,22 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
                     irregular_shape=data_dict['irregular_shape'])
             optimizer.set_pervoxel_lr(cnt)
             model.mask_cache.mask[cnt.squeeze() <= 2] = False
-        #breakpoint()
         per_voxel_init()
 
     if cfg_train.maskout_lt_nviews > 0:
         model.update_occupancy_cache_lt_nviews(
                 rays_o_tr, rays_d_tr, imsz, render_kwargs, cfg_train.maskout_lt_nviews)
 
-    # ----------------------------- TRAIN DVGO ------------------------- #
-    # GOGO
     torch.cuda.empty_cache()
     psnr_lst = []
     time0 = time.time()
     global_step = -1
     
     clip_loss_fn = CLIPLoss(device="cuda", save_dir="test_img")
-    
-    ####### ----------------------- Travese All Iterations / 200000 ---------------------- #
 
-    for global_step in trange(1+start, 1+cfg_train.N_iters):   
-        
+    for global_step in trange(1+start, 1+cfg_train.N_iters):
 
         clip_stage = True
-        #clip_stage = True
 
         # renew occupancy grid
         if model.mask_cache is not None and (global_step + 500) % 1000 == 0:
@@ -814,11 +679,8 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
             viewdirs_tr = viewdirs_tr_ft
             ori_mesh_tr = ori_mesh_tr_ft
             
-        if clip_stage == True : 
-     
+        if clip_stage:
             if cfg_train.ray_sampler == 'random':
-                #print("random")
-                #breakpoint()
                 sel_b = torch.randint(rgb_tr.shape[0], [cfg_train.N_rand])
                 sel_r = torch.randint(rgb_tr.shape[1], [cfg_train.N_rand])
                 sel_c = torch.randint(rgb_tr.shape[2], [cfg_train.N_rand])
@@ -826,14 +688,9 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
                 rays_o = rays_o_tr[sel_b, sel_r, sel_c]   ####  randomly select a few   # [6, 1200, 1200, 3]   ->   [8192, 3]
                 rays_d = rays_d_tr[sel_b, sel_r, sel_c]
                 viewdirs = viewdirs_tr[sel_b, sel_r, sel_c]
-                #depth_target = depth_gt[sel_b, sel_r, sel_c, 0] 
             else:
                 raise NotImplementedError
-            
-        #else :  # clip_stage = True # epoch 100
-            
-        ### ------- change to computing CLIP loss every 100 epochs
-        ### ------- may need to downscale image? (1200x1200 is too large for volume rendering) downsample or use many patches
+
             H, W = ori_mesh_tr.shape[1:3]
             patch_size = cfg_train.patch_size
             patches_per_img = 1
@@ -855,25 +712,16 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
                     rays_d_patch = rays_d_tr[img_idx, i:i+patch_size, j:j+patch_size, :]
                     viewdirs_patch = viewdirs_tr[img_idx, i:i+patch_size, j:j+patch_size, :]
 
-                    # reshape to [3600, 3]
                     all_target_patches.append(target_patch.reshape(-1, 3))
                     all_rays_o_patches.append(rays_o_patch.reshape(-1, 3))
                     all_rays_d_patches.append(rays_d_patch.reshape(-1, 3))
                     all_viewdirs_patches.append(viewdirs_patch.reshape(-1, 3))
 
-                # merge all patches → [6*6*3600 = 129600, 3]
             target_ms = torch.cat(all_target_patches, dim=0)
             rays_o_ms = torch.cat(all_rays_o_patches, dim=0)
             rays_d_ms = torch.cat(all_rays_d_patches, dim=0)
             viewdirs_ms = torch.cat(all_viewdirs_patches, dim=0)
-            """
-            # save image by image
-            for i in range(target_ori_np.shape[0]):
-                img_path = os.path.join(save_dir, f"image_{i}.png")  # save as PNG format
-                imageio.imwrite(img_path, (target_ori_np[i] * 255).astype("uint8"))  # convert to 0-255
-                print(f"Saved {img_path}")
-            """
-        
+
 
 
         if cfg.data.load2gpu_on_the_fly:
@@ -883,62 +731,31 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
             viewdirs = viewdirs.to(device)
 
 
-        if clip_stage == True:
-            # volume rendering
-            render_result = model(   ####DVGO.forward     ####Dict    #####full DVGO is a dict
+        if clip_stage:
+            render_result = model(
                 rays_o, rays_d, viewdirs,
                 global_step=global_step, is_train=True,
                 **render_kwargs)
-        #else:
-            render_result_clip = model(   ####DVGO.forward     ####Dict    #####full DVGO is a dict
+            render_result_clip = model(
                 rays_o_ms, rays_d_ms, viewdirs_ms,
                 global_step=global_step, is_train=True,
                 **render_kwargs)
-            
-            #breakpoint()
 
         optimizer.zero_grad(set_to_none=True)
-        
-        """
-        if global_step==5:
-            for i, group in enumerate(optimizer.param_groups):
-                print(f"Group {i} - lr: {group['lr']}")
-                for p in group['params']:
-                    print(f"  Param shape: {p.shape}, requires_grad: {p.requires_grad}")
 
-            #breakpoint()
-        
-        if global_step>50:
-            for i, group in enumerate(optimizer.param_groups):
-                print(f"Group {i} - lr: {group['lr']}")
-                for p in group['params']:
-                    print(f"  Param shape: {p.shape}, requires_grad: {p.requires_grad}")
-
-            #breakpoint()
-        """
-        
-        # --------------------Uncertainty & MSE  loss -------------------- #
-        # gradient descent step
-        if clip_stage == True : 
+        if clip_stage:
             # find pixel indices where target is [1, 1, 1]
             transparent_mask = (target == 1).all(dim=-1)  # shape [8192], each value is True or False
-            mse_loss = cfg_train.weight_main * F.mse_loss(render_result['rgb_marched'], target)     #[8192, 3]
+            mse_loss = cfg_train.weight_main * F.mse_loss(render_result['rgb_marched'], target)
 
-            #### ------ loss
-        
-            ####### rgb values of 8192 pixels after volume rendering  ### compared with rgb_tr after random crop [8192]
-
-            # ------------------- Trans Pixel Alpha Loss ------------- #
-            # extract alphainv_last for transparent pixels
+            # transparent pixel alpha loss
             transparent_alpha = render_result['alphainv_last'][transparent_mask]  # Shape: [M]
 
             # penalize alpha of transparent pixels that are not fully transparent
-            transparent_loss = ((1 - transparent_alpha) ** 2).mean()  # 1 means fully transparent
-            trans_loss_weight = cfg_train.transparent_loss_weight #5.0 #1.5
-            #1.5  ##1.5   #### 1    ###
+            transparent_loss = ((1 - transparent_alpha) ** 2).mean()
+            trans_loss_weight = cfg_train.transparent_loss_weight
 
-            # ------------------ Depth Loss ----------------- #
-            # extract depth GT based on randomly selected ray indices
+            # depth loss
             depth_gt = torch.tensor(depth_gt, device=device)
     
             depth_target = depth_gt[sel_b.to(depth_gt.device), sel_r.to(depth_gt.device), sel_c.to(depth_gt.device), 0]
@@ -964,25 +781,12 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
             transparent_loss = transparent_loss * trans_loss_weight
             
             
-            loss_ori = cfg_train.mse_loss_weight * mse_loss  +  transparent_loss + depth_loss  ## mse * 3 
-            
-            
-   
-            
-            #loss = mse_loss
-            # record each loss
-            #loss_history["total_loss"].append(loss_ori.item())
+            loss_ori = cfg_train.mse_loss_weight * mse_loss + transparent_loss + depth_loss
+
             loss_history["mse_loss"].append(mse_loss.item())
             loss_history["alpha_loss"].append(transparent_loss.item())
             loss_history["depth_loss"].append(depth_loss.item())
 
-            # print( " ------ scene_rep_reconstru ------ ")
-            # use .detach() to remove gradient tracking
-            # np.savez_compressed("scripts/render_depth_qqqq.npz", render_depth = depth_target.detach().cpu().numpy())
-            # np.savez_compressed("scripts/depth_target_qqqq.npz", depth_target = render_depth.detach().cpu().numpy())
-            #breakpoint()
-            #mse_loss = F.mse_loss(render_result['rgb_marched'], target)
-            
             psnr = utils.mse2psnr(mse_loss.detach())
             
             if cfg_train.weight_entropy_last > 0:
@@ -1009,24 +813,15 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
                 loss_ori += cfg_train.weight_rgbper * rgbper_loss
 
 
-        #else: 
-            
-        
-            transparent_mask_clip = (target_ms == 1).all(dim=-1) 
-            # extract alphainv_last for transparent pixels
+            transparent_mask_clip = (target_ms == 1).all(dim=-1)
             transparent_alpha_clip = render_result_clip['alphainv_last'][transparent_mask_clip]  # Shape: [M]
 
             # penalize alpha of transparent pixels that are not fully transparent
             transparent_loss_clip = ((1 - transparent_alpha_clip) ** 2).mean()  # 1 means fully transparent
             trans_loss_weight = cfg_train.trans_loss_clip_weight #5.0 #1.5
             transparent_loss_clip = transparent_loss_clip * trans_loss_weight
-            
-            #breakpoint()
-            if (global_step<cfg_train.only_trans_start):
-                
-                
-                #clip_loss = loss_ori
-                
+
+            if global_step < cfg_train.only_trans_start:
                 patch_size = cfg_train.patch_size
                 num_patches = render_result_clip['rgb_marched'].shape[0] // (patch_size * patch_size)
 
@@ -1034,14 +829,13 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
                 target_rgb = target_ms.reshape(num_patches, patch_size, patch_size, 3)
                 
                 clip_loss = clip_loss_fn(render_rgb, target_rgb)
-            
-                #loss =   loss_ori + transparent_loss_clip + clip_loss
-                loss =   cfg_train.loss_ori_weight * loss_ori   +  cfg_train.transparent_loss_clip_weight * transparent_loss_clip + cfg_train.clip_loss_weight * clip_loss 
-            else : 
+                loss = (cfg_train.loss_ori_weight * loss_ori
+                      + cfg_train.transparent_loss_clip_weight * transparent_loss_clip
+                      + cfg_train.clip_loss_weight * clip_loss)
+            else:
                 loss = cfg_train.only_trans_loss_weight * transparent_loss
                 clip_loss = torch.tensor(0.0, device="cuda")
                 transparent_loss_clip = torch.tensor(0.0, device="cuda")
-            #loss =  2 * loss_ori
             
             
             loss_history["clip_loss"].append(clip_loss.item())
@@ -1050,11 +844,8 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
 
 
         loss.backward()
-        #breakpoint()
-        ## p model.logit.grid.shape    # torch.Size([1, 8, 60, 60, 60])
-        ## p model.k0.grid.grad.shape  # torch.Size([1, 3, 60, 60, 60])
-        
-        if global_step<cfg_train.tv_before and global_step>cfg_train.tv_after and global_step%cfg_train.tv_every==0:
+
+        if global_step < cfg_train.tv_before and global_step>cfg_train.tv_after and global_step%cfg_train.tv_every==0:
             if cfg_train.weight_tv_density>0:
                 model.density_total_variation_add_grad(    
                     cfg_train.weight_tv_density/len(rays_o), global_step<cfg_train.tv_dense_before)
@@ -1066,20 +857,14 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
                     cfg_train.weight_tv_uncertainty/len(rays_o), global_step<cfg_train.tv_dense_before)
 
         optimizer.step()
-        
-        #psnr_lst.append(psnr.item())
 
         # update lr
         decay_steps = cfg_train.lrate_decay * 1000
         decay_factor = 0.1 ** (1/decay_steps)
         for i_opt_g, param_group in enumerate(optimizer.param_groups):
             param_group['lr'] = param_group['lr'] * decay_factor
-        
-        
-  
-        #breakpoint()
 
-        if global_step%args.i_print==0:
+        if global_step % args.i_print == 0:
             eps_time = time.time() - time0
             eps_time_str = f'{eps_time//3600:02.0f}:{eps_time//60%60:02.0f}:{eps_time%60:02.0f}'
             tqdm.write(f'scene_rep_reconstruction ({stage}): iter {global_step:6d} / '
@@ -1096,8 +881,7 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
 
 
 
-    if global_step != -1 :
-  
+    if global_step != -1:
         model_state = model.state_dict()
 
         torch.save({
@@ -1108,9 +892,6 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
         }, last_ckpt_path)
 
         print(f'scene_rep_reconstruction ({stage}): saved checkpoints at', last_ckpt_path)
-    
-    """---- saving density ----"""
-    
 
     # plot loss curve
     def smooth_curve(data, window_size=100):
@@ -1135,16 +916,11 @@ def scene_rep_reconstruction(args, cfg, cfg_model, cfg_train, xyz_min, xyz_max, 
     loss_plot_path = os.path.join(cfg.basedir, cfg.expname, f"loss_curve_{stage}_clip.png")
     plt.savefig(loss_plot_path)
     plt.close()
-    
+
     draw_logit_entropy_history(
     logit_dir=os.path.join(cfg.basedir, cfg.expname, "logit_stats"),
     save_path=os.path.join(cfg.basedir, cfg.expname, "logit_his.png")
     )
-
-    
-    #np.savez("depth_data.npz", render_depth=render_depth_np, depth_target=depth_target_np)
-    #print("save at the end")
-    #breakpoint()
 
 
 def train(args, cfg, data_dict):
@@ -1162,13 +938,11 @@ def train(args, cfg, data_dict):
     # coarse geometry searching (only works for inward bounded scenes)
     eps_coarse = time.time()
     
-    #xyz_min_coarse, xyz_max_coarse = compute_bbox_by_cam_frustrm(args=args, cfg=cfg, **data_dict)
     xyz_min_coarse = torch.tensor([-10, -10, -10])
-    xyz_max_coarse = torch.tensor([10,   10,  10])
+    xyz_max_coarse = torch.tensor([10, 10, 10])
 
     # save coarse training ckpt
     if cfg.coarse_train.N_iters > 0:
-        #breakpoint()
         scene_rep_reconstruction(
                 args=args, cfg=cfg,
                 cfg_model=cfg.coarse_model_and_render, cfg_train=cfg.coarse_train,
@@ -1183,33 +957,8 @@ def train(args, cfg, data_dict):
         print('train: skip coarse geometry searching')
         coarse_ckpt_path = None
 
-    print('train: skip fine detail reconstruction')
-    
-    """
-    # fine detail reconstruction
-    eps_fine = time.time()
-    if cfg.coarse_train.N_iters == 0:
-        xyz_min_fine, xyz_max_fine = xyz_min_coarse.clone(), xyz_max_coarse.clone()
-    else:
-        xyz_min_fine, xyz_max_fine = compute_bbox_by_coarse_geo(
-                model_class=dvgo_ortho.DirectVoxGO, model_path=coarse_ckpt_path,
-                thres=cfg.fine_model_and_render.bbox_thres)
-    scene_rep_reconstruction(
-            args=args, cfg=cfg,
-            cfg_model=cfg.fine_model_and_render, cfg_train=cfg.fine_train,
-            xyz_min=xyz_min_fine, xyz_max=xyz_max_fine,
-            data_dict=data_dict, stage='fine',
-            coarse_ckpt_path=coarse_ckpt_path)
-    eps_fine = time.time() - eps_fine
-    eps_time_str = f'{eps_fine//3600:02.0f}:{eps_fine//60%60:02.0f}:{eps_fine%60:02.0f}'
-    print('train: fine detail reconstruction in', eps_time_str)
-    
-    eps_time = time.time() - eps_time
-    eps_time_str = f'{eps_time//3600:02.0f}:{eps_time//60%60:02.0f}:{eps_time%60:02.0f}'
-    print('train: finish (eps time', eps_time_str, ')')
-    """
 
- 
+
 if __name__=='__main__':
 
     # load setup
@@ -1230,15 +979,10 @@ if __name__=='__main__':
     print(" ----- main.py ----- ")
     #print(" After load everythings ")
 
-    # export scene bbox and camera poses in 3d for debugging and visualization
-    # ------ get camera rays line visualization ----------# 
     if args.export_bbox_and_cams_only:
         print('Export bbox and cameras...')
-        #xyz_min, xyz_max = compute_bbox_by_cam_frustrm(args=args, cfg=cfg, **data_dict)
-        xyz_min = tensor([-10, -10, -10])
-        xyz_max = tensor([10, 10, 10])
-        xyz_max = torch.tensor(xyz_max)
-        xyz_min = torch.tensor(xyz_min)
+        xyz_min = torch.tensor([-10, -10, -10])
+        xyz_max = torch.tensor([10, 10, 10])
         print("xyz_min = ", xyz_min)
         print("xyz_max = ", xyz_max)
 
@@ -1285,19 +1029,10 @@ if __name__=='__main__':
 
     # train
 
-    ###### ,  here train -> train wraps scene_recons  #pass in data_dict
     if not args.render_only:
-        train(args, cfg, data_dict)   # ------------- train 
-  
-    # load model for rendring
+        train(args, cfg, data_dict)
+
     if args.render_test or args.render_train or args.render_video:
-        """
-        if args.ft_path:
-            ckpt_path = args.ft_path
-        else:
-            #ckpt_path = os.path.join(cfg.basedir, cfg.expname, 'fine_last.tar') #fine training
-            ckpt_path = os.path.join(cfg.basedir, cfg.expname, 'coarse_last.tar')
-        """
         ckpt_path = os.path.join(cfg.basedir, cfg.expname, 'coarse_last.tar')
         ckpt_name = ckpt_path.split('/')[-1][:-4]
 
